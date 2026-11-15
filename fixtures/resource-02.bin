@@ -1,0 +1,1 @@
+{"change":11,"files":[{"depotFile":"//design/core/a.txt","rev":2,"action":"move/delete","movedFile":"//design/core/renamed.txt"},{"depotFile":"//design/core/renamed.txt","rev":1,"action":"move/add","movedFile":"//design/core/a.txt"}]}

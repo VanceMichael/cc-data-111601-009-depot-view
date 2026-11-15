@@ -1,0 +1,34 @@
+{
+  "catalog": {
+    "entry": "/primary",
+    "view": "/view",
+    "changes": [
+      "/changes/11"
+    ],
+    "contents": "/contents"
+  },
+  "resources": {
+    "/primary": {
+      "file": "primary.bin",
+      "type": "application/json"
+    },
+    "/view": {
+      "file": "resource-01.bin",
+      "type": "application/json",
+      "phases": {
+        "1": {
+          "file": null,
+          "body": "{\"version\":2,\"client\":\"delivery\",\"lines\":[\"//design/core/... //delivery/releases/...\",\"+//design/other/... //delivery/releases/...\"]}"
+        }
+      }
+    },
+    "/changes/11": {
+      "file": "resource-02.bin",
+      "type": "application/json"
+    },
+    "/contents": {
+      "file": "resource-03.bin",
+      "type": "application/json"
+    }
+  }
+}
