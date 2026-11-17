@@ -13,6 +13,10 @@ export class Store {
       if (error.code !== 'ENOENT') throw error;
       await this.saveIndex([]);
     }
+    try { await this.listDeliveries(); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      await this.saveDeliveries([]);
+    }
     return this;
   }
   async saveIndex(records) {
@@ -20,8 +24,40 @@ export class Store {
     await writeFile(temporary, JSON.stringify(records));
     await rename(temporary, join(this.directory, 'index.json'));
   }
+  async saveDeliveries(deliveries) {
+    const temporary = join(this.directory, `deliveries-${randomUUID()}.tmp`);
+    await writeFile(temporary, JSON.stringify(deliveries));
+    await rename(temporary, join(this.directory, 'deliveries.json'));
+  }
   async list() {
     return JSON.parse(await readFile(join(this.directory, 'index.json'), 'utf8'));
+  }
+  async listDeliveries() {
+    return JSON.parse(await readFile(join(this.directory, 'deliveries.json'), 'utf8'));
+  }
+  async getDelivery(id) {
+    return (await this.listDeliveries()).find(delivery => delivery.id === id) ?? null;
+  }
+  async putDelivery(delivery) {
+    const operation = this.pending.then(async () => {
+      const deliveries = await this.listDeliveries();
+      const index = deliveries.findIndex(existing => existing.id === delivery.id);
+      if (index >= 0) deliveries[index] = delivery;
+      else deliveries.push(delivery);
+      await this.saveDeliveries(deliveries);
+      return delivery;
+    });
+    this.pending = operation.catch(() => {});
+    return operation;
+  }
+  async storeObject(bytes) {
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    const operation = this.pending.then(async () => {
+      await writeFile(join(this.directory, 'objects', digest), bytes);
+      return digest;
+    });
+    this.pending = operation.catch(() => {});
+    return operation;
   }
   async accept(bytes, source, parsed) {
     const digest = createHash('sha256').update(bytes).digest('hex');

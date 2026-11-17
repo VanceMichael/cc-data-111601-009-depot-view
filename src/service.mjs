@@ -3,7 +3,25 @@ import { fileURLToPath } from 'node:url';
 import { Store } from './store.mjs';
 import { acquire } from './transport.mjs';
 import { inspect } from './reader.mjs';
+import { collectDelivery, followChangelist, refreshDelivery } from './courier.mjs';
 import { startProvider } from './provider.mjs';
+
+async function readJson(request) {
+  const chunks = []; let length = 0;
+  for await (const chunk of request) {
+    length += chunk.length;
+    if (length > 16384) throw new Error('request_too_large');
+    chunks.push(chunk);
+  }
+  if (!chunks.length) return {};
+  return JSON.parse(Buffer.concat(chunks).toString());
+}
+
+function summarize(delivery) {
+  return { id: delivery.id, status: delivery.status, change: delivery.change,
+    viewVersion: delivery.view.version, entries: delivery.entries.length,
+    collisions: delivery.collisions.length, updatedAt: delivery.updatedAt };
+}
 
 export async function startService({ source, directory, port = 0 }) {
   const store = await new Store(directory).initialize();
@@ -18,19 +36,43 @@ export async function startService({ source, directory, port = 0 }) {
         return response.end(await store.object(url.pathname.slice(9)));
       }
       if (url.pathname === '/intakes' && request.method === 'POST') {
-        const chunks = []; let length = 0;
-        for await (const chunk of request) {
-          length += chunk.length;
-          if (length > 16384) throw new Error('request_too_large');
-          chunks.push(chunk);
-        }
-        const payload = JSON.parse(Buffer.concat(chunks).toString());
+        const payload = await readJson(request);
         if (typeof payload.path !== 'string') throw new Error('path_required');
         const result = await acquire(source, payload.path);
         const parsed = inspect(result.bytes);
         const record = await store.accept(result.bytes, new URL(payload.path, source).href, parsed);
         response.statusCode = 201;
         return response.end(JSON.stringify(record));
+      }
+      if (url.pathname === '/deliveries' && request.method === 'POST') {
+        await readJson(request);
+        const delivery = await collectDelivery(source, store);
+        response.statusCode = 201;
+        return response.end(JSON.stringify(delivery));
+      }
+      if (url.pathname === '/deliveries' && request.method === 'GET') {
+        return response.end(JSON.stringify((await store.listDeliveries()).map(summarize)));
+      }
+      const deliveryMatch = /^\/deliveries\/([^/]+)$/.exec(url.pathname);
+      if (deliveryMatch && request.method === 'GET') {
+        const delivery = await store.getDelivery(deliveryMatch[1]);
+        if (!delivery) { response.writeHead(404); return response.end(JSON.stringify({ error: 'unknown_delivery' })); }
+        return response.end(JSON.stringify(delivery));
+      }
+      const followMatch = /^\/deliveries\/([^/]+)\/changes$/.exec(url.pathname);
+      if (followMatch && request.method === 'POST') {
+        const payload = await readJson(request);
+        if (typeof payload.path !== 'string') throw new Error('path_required');
+        const result = await followChangelist(source, store, followMatch[1], payload.path);
+        if (!result) { response.writeHead(404); return response.end(JSON.stringify({ error: 'unknown_delivery' })); }
+        return response.end(JSON.stringify(result));
+      }
+      const refreshMatch = /^\/deliveries\/([^/]+)\/refresh$/.exec(url.pathname);
+      if (refreshMatch && request.method === 'POST') {
+        await readJson(request);
+        const result = await refreshDelivery(source, store, refreshMatch[1]);
+        if (!result) { response.writeHead(404); return response.end(JSON.stringify({ error: 'unknown_delivery' })); }
+        return response.end(JSON.stringify(result));
       }
       response.writeHead(404); response.end(JSON.stringify({ error: 'not_found' }));
     } catch (error) { response.statusCode = 422; response.end(JSON.stringify({ error: error.message })); }

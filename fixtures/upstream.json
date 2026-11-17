@@ -3,7 +3,9 @@
     "entry": "/primary",
     "view": "/view",
     "changes": [
-      "/changes/11"
+      "/changes/11",
+      "/changes/12",
+      "/changes/13"
     ],
     "contents": "/contents"
   },
@@ -24,6 +26,14 @@
     },
     "/changes/11": {
       "file": "resource-02.bin",
+      "type": "application/json"
+    },
+    "/changes/12": {
+      "file": "resource-04.bin",
+      "type": "application/json"
+    },
+    "/changes/13": {
+      "file": "resource-05.bin",
       "type": "application/json"
     },
     "/contents": {
